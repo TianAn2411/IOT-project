@@ -1,46 +1,47 @@
 #include "task_wifi.h"
 
-void startAP()
+void startAP(GlobalContext *ctx)
 {
     WiFi.mode(WIFI_AP);
-    WiFi.softAP(String(SSID_AP), String(PASS_AP));
+    WiFi.softAP(ctx->ssid, ctx->password);
     Serial.print("AP IP: ");
     Serial.println(WiFi.softAPIP());
 }
 
-void startSTA()
+void startSTA(GlobalContext *ctx)
 {
-    if (WIFI_SSID.isEmpty())
+    if (ctx->WIFI_SSID.isEmpty())
     {
-        vTaskDelete(NULL);
+        return; // Changed from vTaskDelete(NULL) to prevent deleting main_task
     }
 
     WiFi.mode(WIFI_STA);
 
-    if (WIFI_PASS.isEmpty())
+    if (ctx->WIFI_PASS.isEmpty())
     {
-        WiFi.begin(WIFI_SSID.c_str());
+        WiFi.begin(ctx->WIFI_SSID.c_str());
     }
     else
     {
-        WiFi.begin(WIFI_SSID.c_str(), WIFI_PASS.c_str());
+        WiFi.begin(ctx->WIFI_SSID.c_str(), ctx->WIFI_PASS.c_str());
     }
 
     while (WiFi.status() != WL_CONNECTED)
     {
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
-    //Give a semaphore here
-    xSemaphoreGive(xBinarySemaphoreInternet);
+    
+    // Give internet semaphore upon successful connect
+    xSemaphoreGive(ctx->xBinarySemaphoreInternet);
 }
 
-bool Wifi_reconnect()
+bool Wifi_reconnect(GlobalContext *ctx)
 {
     const wl_status_t status = WiFi.status();
     if (status == WL_CONNECTED)
     {
         return true;
     }
-    startSTA();
+    startSTA(ctx);
     return false;
 }

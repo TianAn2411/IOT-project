@@ -6,15 +6,59 @@
 #include "freertos/task.h"
 #include "freertos/semphr.h"
 
-extern float glob_temperature;
-extern float glob_humidity;
+// Define States for Temperature and Humidity
+enum SensorState {
+    STATE_NORMAL,
+    STATE_WARNING,
+    STATE_CRITICAL
+};
 
-extern String WIFI_SSID;
-extern String WIFI_PASS;
-extern String CORE_IOT_TOKEN;
-extern String CORE_IOT_SERVER;
-extern String CORE_IOT_PORT;
+// Application Context replacing global variables
+struct GlobalContext {
+    // Sensor Information
+    float temperature = -1.0;
+    float humidity = -1.0;
+    float predictedMinTemp = 0.0;
+    float predictedMaxTemp = 0.0;
 
-extern boolean isWifiConnected;
-extern SemaphoreHandle_t xBinarySemaphoreInternet;
-#endif
+    // States
+    SensorState tempState = STATE_NORMAL;
+    SensorState humiState = STATE_NORMAL;
+    
+    // Mutex to protect shared data write/reads
+    SemaphoreHandle_t dataMutex;
+
+    // Sync Semaphores
+    SemaphoreHandle_t semTempUpdate;
+    SemaphoreHandle_t semHumiUpdate;
+    SemaphoreHandle_t semLCDUpdate;
+
+    // Networking
+    String WIFI_SSID;
+    String WIFI_PASS;
+    String CORE_IOT_TOKEN;
+    String CORE_IOT_SERVER;
+    String CORE_IOT_PORT;
+
+    String ssid = "ESP32-YOUR NETWORK HERE!!!";
+    String password = "12345678";
+    String wifi_ssid = "abcde";
+    String wifi_password = "123456789";
+    
+    boolean isWifiConnected = false;
+    SemaphoreHandle_t xBinarySemaphoreInternet;
+};
+
+// --- Task & Module Includes ---
+// (Placed here so that any file including global.h gets access to all task prototypes)
+#include "led_blinky.h"
+#include "neo_blinky.h"
+#include "temp_humi_monitor.h"
+#include "tinyml.h"
+#include "coreiot.h"
+#include "task_check_info.h"
+#include "task_wifi.h"
+#include "task_core_iot.h"
+#include "task_lcd.h"
+
+#endif // __GLOBAL_H__

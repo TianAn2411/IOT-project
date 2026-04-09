@@ -79,11 +79,11 @@ void CORE_IOT_sendata(String mode, String feed, String data)
     }
 }
 
-void CORE_IOT_reconnect()
+void CORE_IOT_reconnect(GlobalContext *ctx)
 {
     if (!tb.connected())
     {
-        if (!tb.connect(CORE_IOT_SERVER.c_str(), CORE_IOT_TOKEN.c_str(), CORE_IOT_PORT.toInt()))
+        if (!tb.connect(ctx->CORE_IOT_SERVER.c_str(), ctx->CORE_IOT_TOKEN.c_str(), ctx->CORE_IOT_PORT.toInt()))
         {
             // Serial.println("Failed to connect");
             return;

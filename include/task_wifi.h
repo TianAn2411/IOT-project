@@ -3,9 +3,9 @@
 
 #include <WiFi.h>
 #include <task_check_info.h>
-#include <task_webserver.h>
 
-extern bool Wifi_reconnect();
-extern void startAP();
+void startAP(GlobalContext *ctx);
+void startSTA(GlobalContext *ctx);
+bool Wifi_reconnect(GlobalContext *ctx);
 
 #endif

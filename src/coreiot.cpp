@@ -1,21 +1,14 @@
 #include "coreiot.h"
 
-// ----------- CONFIGURE THESE! -----------
-const char* coreIOT_Server = "10.235.76.226";  
-const char* coreIOT_Token = "g7drm1amhd3dchr379xu";   // Device Access Token
-const int   mqttPort = 1883;
-// ----------------------------------------
-
 WiFiClient espClient;
 PubSubClient client(espClient);
 
 
-void reconnect() {
+void reconnect(GlobalContext *ctx) {
   // Loop until we're reconnected
   while (!client.connected()) {
     Serial.print("Attempting MQTT connection...");
-    // Attempt to connect (username=token, password=empty)
-    //if (client.connect("ESP32Client", coreIOT_Token, NULL)) {
+    // Attempt to connect
     String clientId = "ESP32Client-";
     clientId += String(random(0xffff), HEX);
 
@@ -59,18 +52,12 @@ void callback(char* topic, byte* payload, unsigned int length) {
 
   const char* method = doc["method"];
   if (strcmp(method, "setStateLED") == 0) {
-    // Check params type (could be boolean, int, or string according to your RPC)
-    // Example: {"method": "setValueLED", "params": "ON"}
     const char* params = doc["params"];
 
     if (strcmp(params, "ON") == 0) {
       Serial.println("Device turned ON.");
-      //TODO
-
     } else {   
       Serial.println("Device turned OFF.");
-      //TODO
-
     }
   } else {
     Serial.print("Unknown method: ");
@@ -79,52 +66,47 @@ void callback(char* topic, byte* payload, unsigned int length) {
 }
 
 
-void setup_coreiot(){
-
-  //Serial.print("Connecting to WiFi...");
-  //WiFi.begin(wifi_ssid, wifi_password);
-  //while (WiFi.status() != WL_CONNECTED) {
-  
-  // while (isWifiConnected == false) {
-  //   delay(500);
-  //   Serial.print(".");
-  // }
+void setup_coreiot(GlobalContext *ctx){
 
   while(1){
-    if (xSemaphoreTake(xBinarySemaphoreInternet, portMAX_DELAY)) {
+    if (xSemaphoreTake(ctx->xBinarySemaphoreInternet, portMAX_DELAY)) {
       break;
     }
     delay(500);
     Serial.print(".");
   }
 
-
   Serial.println(" Connected!");
 
-  client.setServer(CORE_IOT_SERVER.c_str(), CORE_IOT_PORT.toInt());
+  client.setServer(ctx->CORE_IOT_SERVER.c_str(), ctx->CORE_IOT_PORT.toInt());
   client.setCallback(callback);
-
 }
 
 void coreiot_task(void *pvParameters){
-
-    setup_coreiot();
+    GlobalContext *ctx = (GlobalContext *)pvParameters;
+    setup_coreiot(ctx);
 
     while(1){
 
         if (!client.connected()) {
-            reconnect();
+            reconnect(ctx);
         }
         client.loop();
 
+        float t = -1;
+        float h = -1;
+        if (xSemaphoreTake(ctx->dataMutex, portMAX_DELAY) == pdTRUE) {
+            t = ctx->temperature;
+            h = ctx->humidity;
+            xSemaphoreGive(ctx->dataMutex);
+        }
+
         // Sample payload, publish to 'v1/devices/me/telemetry'
-        String payload = "{\"temperature\":" + String(glob_temperature) +  ",\"humidity\":" + String(glob_humidity) + "}";
+        String payload = "{\"temperature\":" + String(t) +  ",\"humidity\":" + String(h) + "}";
         
         client.publish("v1/devices/me/telemetry", payload.c_str());
-
-
         
         Serial.println("Published payload: " + payload);
-        vTaskDelay(10000);  // Publish every 10 seconds
+        vTaskDelay(10000 / portTICK_PERIOD_MS);  // Publish every 10 seconds
     }
 }

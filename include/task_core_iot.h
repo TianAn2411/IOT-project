@@ -8,6 +8,6 @@
 #include "task_check_info.h"
 
 void CORE_IOT_sendata(String mode, String feed, String data);
-void CORE_IOT_reconnect();
+void CORE_IOT_reconnect(GlobalContext *ctx);
 
 #endif

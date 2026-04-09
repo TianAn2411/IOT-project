@@ -1,26 +1,46 @@
 #include "neo_blinky.h"
 
-
 void neo_blinky(void *pvParameters){
+    GlobalContext* ctx = (GlobalContext*)pvParameters;
 
     Adafruit_NeoPixel strip(LED_COUNT, NEO_PIN, NEO_GRB + NEO_KHZ800);
     strip.begin();
-    // Set all pixels to off to start
     strip.clear();
     strip.show();
 
-    while(1) {                          
-        strip.setPixelColor(0, strip.Color(255, 0, 0)); // Set pixel 0 to red
-        strip.show(); // Update the strip
+    // Default color values
+    uint8_t r = 0, g = 0, b = 0;
 
-        // Wait for 500 milliseconds
-        vTaskDelay(500);
+    while(1) {
+        // Wait for humidity update semaphore.
+        // NeoPixel doesn't need to blink constantly if the color is just solid.
+        // If it should blink, use polling. The assignment says "color patterns ... represent different humidity levels".
+        // Example: Normal -> Green, Warning -> Yellow/Orange, Critical -> Red.
+        
+        // Block until there's an update. On boot, maybe it takes a few seconds.
+        if (xSemaphoreTake(ctx->semHumiUpdate, portMAX_DELAY) == pdTRUE) {
+            SensorState state;
+            if (xSemaphoreTake(ctx->dataMutex, portMAX_DELAY) == pdTRUE) {
+                state = ctx->humiState;
+                xSemaphoreGive(ctx->dataMutex);
+            }
 
-        // Set the pixel to off
-        strip.setPixelColor(0, strip.Color(0, 0, 0)); // Turn pixel 0 off
-        strip.show(); // Update the strip
+            if (state == STATE_NORMAL) {
+                // Green for normal
+                r = 0; g = 255; b = 0;
+            } else if (state == STATE_WARNING) {
+                // Orange/Yellow for warning
+                r = 255; g = 165; b = 0;
+            } else if (state == STATE_CRITICAL) {
+                // Red for critical
+                r = 255; g = 0; b = 0;
+            }
 
-        // Wait for another 500 milliseconds
-        vTaskDelay(500);
+            // Set pattern
+            for(int i=0; i<strip.numPixels(); i++) {
+                strip.setPixelColor(i, strip.Color(r, g, b));
+            }
+            strip.show();
+        }
     }
 }

@@ -7,7 +7,8 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 
-
+void setup_coreiot(GlobalContext *ctx);
 void coreiot_task(void *pvParameters);
+void reconnect(GlobalContext *ctx);
 
 #endif
