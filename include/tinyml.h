@@ -3,7 +3,7 @@
 
 #include <Arduino.h>
 
-#include "weather_model.h"
+#include "hcm_weather_binary_model.h"
 #include "global.h"
 
 #include <TensorFlowLite_ESP32.h>

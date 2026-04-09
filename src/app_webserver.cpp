@@ -263,8 +263,8 @@ void app_webserver_init() {
     String json = "{";
     json += "\"temp_c\":" + String(t, 1) + ",";
     json += "\"humidity\":" + String(h, 1) + ",";
-    json += "\"counter\":" + String(g_dummyCounter) + ",";
-    json += "\"rtc\":\"" + json_escape(g_sensorRtcIso) + "\",";
+    json += "\"counter\":" + String(g_dummyCounter++) + ",";
+    json += "\"rtc\":\"" + json_escape(app_rtc_now_iso8601()) + "\",";
     json += "\"rtc_ready\":" + String(app_rtc_is_ready() ? "true" : "false");
     json += "}";
     request->send(200, "application/json", json);
