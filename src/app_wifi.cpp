@@ -4,6 +4,7 @@
 
 #include "variable.h"
 
+#include <ArduinoHttpClient.h>
 #include <WiFi.h>
 #include <cstring>
 
@@ -14,6 +15,15 @@ bool g_apActive = false;
 bool g_scanInProgress = false;
 bool g_scanRequestPending = false;
 String g_scanCacheJson = "{\"networks\":[],\"count\":0,\"message\":\"Scan not started\"}";
+bool g_internetConnected = false;
+bool g_hasInternetCheckResult = false;
+uint32_t g_lastInternetCheckMs = 0;
+
+constexpr uint32_t kInternetCheckIntervalMs = 120000UL;  // every 2 minutes
+constexpr uint32_t kInternetCheckTimeoutMs = 5000UL;
+constexpr char kInternetCheckHost[] = "www.google.com";
+constexpr uint16_t kInternetCheckPort = 80;
+constexpr char kInternetCheckPath[] = "/generate_204";
 
 void copy_text(char *dest, size_t size, const char *src) {
   if (size == 0) {
@@ -182,6 +192,59 @@ void apply_normal_mode() {
   g_modeStartedMs = millis();
 }
 
+bool check_internet_connection() {
+  WiFiClient wifiClient;
+  HttpClient httpClient(wifiClient, kInternetCheckHost, kInternetCheckPort);
+  httpClient.setHttpResponseTimeout(kInternetCheckTimeoutMs);
+  httpClient.get(kInternetCheckPath);
+  const int code = httpClient.responseStatusCode();
+  if (code == 204) {
+    Serial.println("[NET] Internet OK");
+    httpClient.stop();
+    return true;
+  }
+
+  if (code > 0) {
+    Serial.printf("[NET] HTTP code=%d -> Internet NOT OK\n", code);
+  } else {
+    Serial.printf("[NET] HTTP request failed: code=%d\n", code);
+  }
+
+  httpClient.stop();
+  return false;
+}
+
+void update_internet_status() {
+  if (WiFi.status() != WL_CONNECTED) {
+    if (g_internetConnected || g_hasInternetCheckResult) {
+      Serial.println("[NET] Internet check reset: STA disconnected");
+    }
+    g_internetConnected = false;
+    g_hasInternetCheckResult = false;
+    g_lastInternetCheckMs = 0;
+    return;
+  }
+
+  const uint32_t nowMs = millis();
+  if (g_lastInternetCheckMs != 0 &&
+      (nowMs - g_lastInternetCheckMs) < kInternetCheckIntervalMs) {
+    return;
+  }
+
+  g_lastInternetCheckMs = nowMs;
+
+  const bool ok = check_internet_connection();
+
+  if (!g_hasInternetCheckResult || g_internetConnected != ok) {
+    Serial.printf("[NET] Internet %s (ip=%s)\n",
+                  ok ? "reachable" : "unreachable",
+                  WiFi.localIP().toString().c_str());
+  }
+
+  g_internetConnected = ok;
+  g_hasInternetCheckResult = true;
+}
+
 }  // namespace
 
 void app_wifi_init() {
@@ -205,6 +268,8 @@ void app_wifi_loop() {
       app_wifi_enter_normal_mode();
     }
   }
+
+  update_internet_status();
 }
 
 void app_wifi_enter_config_mode() {
@@ -250,6 +315,10 @@ bool app_wifi_connect_sta(const char *ssid, const char *password, uint32_t timeo
 
 bool app_wifi_is_sta_connected() {
   return WiFi.status() == WL_CONNECTED;
+}
+
+bool app_wifi_is_internet_connected() {
+  return g_internetConnected;
 }
 
 bool app_wifi_is_ap_active() {
@@ -335,4 +404,16 @@ uint32_t app_wifi_get_mode_started_ms() {
 
 uint32_t app_wifi_get_mode_elapsed_ms() {
   return millis() - g_modeStartedMs;
+}
+
+bool app_wifi_has_internet_check_result() {
+  return g_hasInternetCheckResult;
+}
+
+uint32_t app_wifi_get_last_internet_check_elapsed_ms() {
+  if (!g_hasInternetCheckResult || g_lastInternetCheckMs == 0) {
+    return 0;
+  }
+
+  return millis() - g_lastInternetCheckMs;
 }

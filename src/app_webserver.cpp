@@ -160,11 +160,20 @@ bool is_config_unlocked() {
 
 String build_status_json() {
   const bool staConnected = app_wifi_is_sta_connected();
+  const bool hasInternetCheck = app_wifi_has_internet_check_result();
+  const bool internetConnected = app_wifi_is_internet_connected();
   const bool apActive = app_wifi_is_ap_active();
 
   String json = "{";
   json += "\"mode\":\"" + current_mode_text() + "\",";
   json += "\"sta_connected\":" + String(staConnected ? "true" : "false") + ",";
+    json += "\"internet_checked\":" + String(hasInternetCheck ? "true" : "false") + ",";
+    json += "\"internet_connected\":" +
+      String((hasInternetCheck && internetConnected) ? "true" : "false") + ",";
+    json += "\"internet_last_check_sec_ago\":" +
+      String(hasInternetCheck ? (app_wifi_get_last_internet_check_elapsed_ms() / 1000UL)
+            : 0) +
+      ",";
   json += "\"ap_active\":" + String(apActive ? "true" : "false") + ",";
   json += "\"sta_ssid\":\"" + json_escape(sta_ssid) + "\",";
   json += "\"sta_connected_ssid\":\"" +
@@ -261,11 +270,13 @@ void app_webserver_init() {
     }
 
     String json = "{";
+    const String rtcIso = app_rtc_now_iso8601();
     json += "\"temp_c\":" + String(t, 1) + ",";
     json += "\"humidity\":" + String(h, 1) + ",";
     json += "\"counter\":" + String(g_dummyCounter) + ",";
-    json += "\"rtc\":\"" + json_escape(g_sensorRtcIso) + "\",";
-    json += "\"rtc_ready\":" + String(app_rtc_is_ready() ? "true" : "false");
+    json += "\"rtc\":\"" + json_escape(rtcIso) + "\",";
+    json += "\"rtc_ready\":" + String(app_rtc_is_ready() ? "true" : "false") + ",";
+    json += "\"ntp_synced\":" + String(app_rtc_is_ntp_synced() ? "true" : "false");
     json += "}";
     request->send(200, "application/json", json);
   });

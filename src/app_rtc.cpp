@@ -4,6 +4,7 @@
 
 #include <ctime>
 #include <cstring>
+#include <WiFi.h>
 
 namespace {
 
@@ -13,10 +14,12 @@ bool g_rtcReady = false;
 bool g_ntpConfigured = false;
 bool g_ntpSynced = false;
 uint32_t g_lastNtpAttemptMs = 0;
+uint32_t g_lastNtpPendingLogMs = 0;
 
 constexpr char kTzInfo[] = "ICT-7";          // GMT+7 (VN)
-constexpr uint32_t kNtpRetryMs = 30000UL;     // retry while not synced
+constexpr uint32_t kNtpRetryMs = 1000UL;      // poll every second while waiting first sync
 constexpr uint32_t kNtpResyncMs = 21600000UL; // resync every 6 hours
+constexpr uint32_t kNtpPendingLogMs = 10000UL; // reduce log spam while pending
 
 constexpr char kNtpServer1[] = "pool.ntp.org";
 constexpr char kNtpServer2[] = "time.nist.gov";
@@ -113,7 +116,19 @@ void app_rtc_loop() {
     return;
   }
 
+  if (app_wifi_has_internet_check_result() && !app_wifi_is_internet_connected()) {
+    return;
+  }
+
   const uint32_t nowMs = millis();
+  if (!g_ntpConfigured) {
+    configTzTime(kTzInfo, kNtpServer1, kNtpServer2, kNtpServer3);
+    g_ntpConfigured = true;
+    g_lastNtpAttemptMs = nowMs;
+    Serial.printf("[RTC] NTP configured, TZ=%s\n", kTzInfo);
+    return;
+  }
+
   const uint32_t intervalMs = g_ntpSynced ? kNtpResyncMs : kNtpRetryMs;
   if ((nowMs - g_lastNtpAttemptMs) < intervalMs) {
     return;
@@ -121,15 +136,15 @@ void app_rtc_loop() {
 
   g_lastNtpAttemptMs = nowMs;
 
-  if (!g_ntpConfigured) {
-    configTzTime(kTzInfo, kNtpServer1, kNtpServer2, kNtpServer3);
-    g_ntpConfigured = true;
-    Serial.printf("[RTC] NTP configured, TZ=%s\n", kTzInfo);
-  }
-
   const time_t ntpNow = time(nullptr);
   if (!is_valid_epoch(ntpNow)) {
-    Serial.println("[RTC] NTP sync pending...");
+    if ((nowMs - g_lastNtpPendingLogMs) >= kNtpPendingLogMs) {
+      g_lastNtpPendingLogMs = nowMs;
+      Serial.printf("[RTC] NTP sync pending... staIp=%s gateway=%s dns1=%s\n",
+                    WiFi.localIP().toString().c_str(),
+                    WiFi.gatewayIP().toString().c_str(),
+                    WiFi.dnsIP(0).toString().c_str());
+    }
     return;
   }
 
@@ -147,6 +162,10 @@ void app_rtc_loop() {
 
 bool app_rtc_is_ready() {
   return g_rtcReady;
+}
+
+bool app_rtc_is_ntp_synced() {
+  return g_ntpSynced;
 }
 
 bool app_rtc_get_datetime(AppRtcDateTime &out) {

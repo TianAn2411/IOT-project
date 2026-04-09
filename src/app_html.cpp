@@ -264,13 +264,19 @@ async function switchToConfigMode() {
 async function refreshStatus() {
   try {
     const s = await api('/api/status');
+    const internetText = s.internet_checked
+      ? (s.internet_connected ? 'Online' : 'Offline')
+      : 'Checking';
     document.getElementById('summary').innerHTML =
       '<span class="pill">Mode: ' + s.mode + '</span>' +
       '<span class="pill">STA: ' + (s.sta_connected ? 'Connected' : 'Disconnected') + '</span>' +
+      '<span class="pill">Internet: ' + internetText + '</span>' +
       '<span class="pill">AP: ' + (s.ap_active ? 'On' : 'Off') + '</span>';
 
     document.getElementById('networkStatus').innerHTML =
       'STA SSID: <span class="ok">' + esc(s.sta_connected_ssid || '--') + '</span><br>' +
+      'Internet: <span class="' + (s.internet_connected ? 'ok' : 'warn') + '">' + internetText + '</span><br>' +
+      'Last check: ' + (s.internet_checked ? (s.internet_last_check_sec_ago + 's ago') : '--') + '<br>' +
       'STA URL: ' + esc(s.sta_url || '-') + '<br>' +
       'AP URL: ' + esc(s.ap_url || '-') + '<br>' +
       '<span class="warn">Config pages are hidden in normal mode</span>';
@@ -297,9 +303,9 @@ async function onToggleAp(enabled) {
 async function refreshSensor() {
   try {
     const s = await api('/api/sensor');
-    let rtcDate = 'RTC not ready';
+    let rtcDate = 'RTC unavailable';
     let rtcTime = '';
-    if (s.rtc_ready && s.rtc) {
+    if (s.rtc) {
       const parts = String(s.rtc).split('T');
       if (parts.length === 2) {
         const d = parts[0].split('-');
@@ -319,7 +325,8 @@ async function refreshSensor() {
       'Temp: ' + s.temp_c.toFixed(1) + ' C<br>' +
       'Humidity: ' + s.humidity.toFixed(1) + ' %<br>' +
       'Counter: ' + s.counter + '<br>' +
-      'RTC: ' + rtcDate + (rtcTime ? '<br>' + rtcTime : '');
+      'RTC: ' + rtcDate + (rtcTime ? '<br>' + rtcTime : '') + '<br>' +
+      'NTP: <span class="' + (s.ntp_synced ? 'ok' : 'warn') + '">' + (s.ntp_synced ? 'Synced' : 'Pending') + '</span>';
   } catch (e) {
     document.getElementById('sensorStatus').textContent = e.message;
   }
@@ -515,9 +522,13 @@ function setMsg(id, msg, ok = true) {
 async function refreshStatus() {
   try {
     const s = await api('/api/status');
+    const internetText = s.internet_checked
+      ? (s.internet_connected ? 'Online' : 'Offline')
+      : 'Checking';
     document.getElementById('summary').innerHTML =
       '<span class="pill">Mode: ' + s.mode + '</span>' +
       '<span class="pill">STA: ' + (s.sta_connected ? 'Connected' : 'Disconnected') + '</span>' +
+      '<span class="pill">Internet: ' + internetText + '</span>' +
       '<span class="pill">AP: ' + (s.ap_active ? 'On' : 'Off') + '</span>';
 
     if (!g_isInitialized) {
@@ -529,6 +540,8 @@ async function refreshStatus() {
 
     document.getElementById('modeStatus').innerHTML =
       'Config timeout: ' + s.config_timeout_sec + 's<br>' +
+      'Internet: <span class="' + (s.internet_connected ? 'ok' : 'err') + '">' + internetText + '</span><br>' +
+      'Last check: ' + (s.internet_checked ? (s.internet_last_check_sec_ago + 's ago') : '--') + '<br>' +
       'AP URL: ' + esc(s.ap_url || '-') + '<br>' +
       'STA URL: ' + esc(s.sta_url || '-');
 
@@ -537,6 +550,7 @@ async function refreshStatus() {
 
     document.getElementById('staStatus').innerHTML =
       'Connected: ' + s.sta_connected + '<br>' +
+      'Internet: ' + internetText + '<br>' +
       'Connected SSID: ' + connectedSsid + '<br>' +
       'Web by STA: ' + esc(s.sta_url || '-');
 
@@ -552,9 +566,9 @@ async function refreshStatus() {
 async function refreshSensor() {
   try {
     const s = await api('/api/sensor');
-    let rtcDate = 'RTC not ready';
+    let rtcDate = 'RTC unavailable';
     let rtcTime = '';
-    if (s.rtc_ready && s.rtc) {
+    if (s.rtc) {
       const parts = String(s.rtc).split('T');
       if (parts.length === 2) {
         const d = parts[0].split('-');
@@ -574,7 +588,8 @@ async function refreshSensor() {
       'Temp: ' + s.temp_c.toFixed(1) + ' C<br>' +
       'Humidity: ' + s.humidity.toFixed(1) + ' %<br>' +
       'Counter: ' + s.counter + '<br>' +
-      'RTC: ' + rtcDate + (rtcTime ? '<br>' + rtcTime : '');
+      'RTC: ' + rtcDate + (rtcTime ? '<br>' + rtcTime : '') + '<br>' +
+      'NTP: <span class="' + (s.ntp_synced ? 'ok' : 'err') + '">' + (s.ntp_synced ? 'Synced' : 'Pending') + '</span>';
   } catch (e) {
     setMsg('sensorStatus', e.message, false);
   }
