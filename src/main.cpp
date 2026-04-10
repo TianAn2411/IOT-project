@@ -9,6 +9,8 @@ GlobalContext* global_ctx = nullptr;
 #include "memory.h"
 #include "variable.h"
 #include "button.h"
+#include "task_output.h"
+#include "task_coreiot.h"
 
 
 // Task includes have been moved to global.h
@@ -57,11 +59,13 @@ void setup()
   app_webserver_init();
 
   xTaskCreate(led_blinky, "Task LED Blink", 2048, ctx, 2, NULL);
+  xTaskCreate(task_output, "Task Output", 3072, ctx, 2, NULL);
   xTaskCreate(neo_blinky, "Task NEO Blink", 2048, ctx, 2, NULL);
   xTaskCreate(temp_humi_monitor, "Task TEMP HUMI Monitor", 2048, ctx, 2, NULL);
   xTaskCreate(task_lcd, "Task LCD", 2048, ctx, 2, NULL);
   xTaskCreate(taskwebserver_member1, "task webserver M1", 8192, nullptr, 2, nullptr);
   xTaskCreate( tiny_ml_task, "Tiny ML Task" , 4096  ,ctx  ,2 , NULL);
+  xTaskCreate(task_coreiot, "Task CoreIOT", 4096, ctx, 2, NULL);
   
   // Main loop logic handled by individual tasks instead of monolith
 

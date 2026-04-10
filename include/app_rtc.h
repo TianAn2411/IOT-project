@@ -16,5 +16,6 @@ void app_rtc_loop();
 bool app_rtc_is_ready();
 bool app_rtc_is_ntp_synced();
 String app_rtc_now_iso8601();
+uint32_t app_rtc_now_timestamp();
 bool app_rtc_get_datetime(AppRtcDateTime &out);
 float app_rtc_get_hour_float();

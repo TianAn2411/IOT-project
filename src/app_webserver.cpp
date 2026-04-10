@@ -2,6 +2,7 @@
 
 #include "app_html.h"
 #include "app_rtc.h"
+#include "task_output.h"
 #include "app_wifi.h"
 #include "variable.h"
 #include "global.h"
@@ -29,15 +30,12 @@ uint32_t g_dummyCounter = 0;
 String g_sensorRtcIso = "";
 
 void log_request(const char *tag, AsyncWebServerRequest *request) {
-  Serial.printf("[WEB] %s %s from %s\n", tag, request->url().c_str(),
-                request->client()->remoteIP().toString().c_str());
+  (void)tag;
+  (void)request;
 }
 
 void log_lock_state(const char *tag) {
-  Serial.printf("[AUTH] %s locked=%s ip=%s lastSeen=%lu ms\n", tag,
-                g_clientLocked ? "true" : "false",
-                g_clientLocked ? g_clientIp.toString().c_str() : "0.0.0.0",
-                static_cast<unsigned long>(g_clientLastSeenMs));
+  (void)tag;
 }
 
 String json_escape(const String &in) {
@@ -77,21 +75,18 @@ void copy_text(char *dest, size_t size, const String &src) {
 }
 
 void release_client_lock() {
-  Serial.println("[AUTH] release_client_lock");
   g_clientLocked = false;
   g_clientIp = IPAddress(0, 0, 0, 0);
   g_clientLastSeenMs = 0;
 }
 
 void reset_login_gate() {
-  Serial.println("[AUTH] reset_login_gate");
   release_client_lock();
 }
 
 void touch_client_if_owner(const IPAddress &ip) {
   if (g_clientLocked && ip == g_clientIp) {
     g_clientLastSeenMs = millis();
-    Serial.printf("[AUTH] touch owner ip=%s\n", ip.toString().c_str());
   }
 }
 
@@ -101,10 +96,6 @@ void refresh_client_lock_state() {
   }
 
   if ((millis() - g_clientLastSeenMs) > kClientIdleTimeoutMs) {
-    Serial.printf(
-        "[AUTH] idle timeout reached: elapsed=%lu ms threshold=%lu ms\n",
-        static_cast<unsigned long>(millis() - g_clientLastSeenMs),
-        static_cast<unsigned long>(kClientIdleTimeoutMs));
     release_client_lock();
   }
 }
@@ -113,25 +104,19 @@ bool is_authorized_ip(const IPAddress &ip) {
   refresh_client_lock_state();
 
   if (!g_clientLocked) {
-    Serial.printf("[AUTH] deny ip=%s reason=no-lock\n", ip.toString().c_str());
     return false;
   }
 
   if (ip != g_clientIp) {
-    Serial.printf("[AUTH] deny ip=%s owner=%s reason=ip-mismatch\n",
-                  ip.toString().c_str(), g_clientIp.toString().c_str());
     return false;
   }
 
   g_clientLastSeenMs = millis();
-  Serial.printf("[AUTH] allow ip=%s\n", ip.toString().c_str());
   return true;
 }
 
 bool ensure_authorized(AsyncWebServerRequest *request) {
   if (current_app_mode != APP_MODE_CONFIG) {
-    Serial.printf("[WEB] reject %s reason=not-config-mode\n",
-                  request->url().c_str());
     request->send(
         403, "application/json",
         "{\"message\":\"Config endpoints are available only in config mode\"}");
@@ -143,8 +128,6 @@ bool ensure_authorized(AsyncWebServerRequest *request) {
     return true;
   }
 
-  Serial.printf("[WEB] unauthorized %s from %s\n", request->url().c_str(),
-                ip.toString().c_str());
   request->send(401, "application/json",
                 "{\"message\":\"Unauthorized. Login first\"}");
   return false;
@@ -184,6 +167,15 @@ String build_status_json() {
   json += "\"sta_url\":\"" + json_escape(app_wifi_get_sta_url()) + "\",";
   json += "\"ap_url\":\"" + json_escape(app_wifi_get_ap_url()) + "\",";
   json += "\"config_timeout_sec\":" + String(config_timeout_ms / 1000UL) + ",";
+    json += "\"mqtt_server\":\"" + json_escape(mqtt_server) + "\",";
+    json += "\"mqtt_port\":" + String(mqtt_port) + ",";
+    json += "\"mqtt_user\":\"" + json_escape(mqtt_user) + "\",";
+    json += "\"mqtt_password\":\"" + json_escape(mqtt_password) + "\",";
+    json += "\"mqtt_publish_interval_sec\":" +
+      String(mqtt_publish_interval_ms / 1000UL) + ",";
+  json += "\"led1_enabled\":" + String(task_output_get_led1_enabled() ? "true" : "false") + ",";
+  json += "\"pwm1_enabled\":" + String(task_output_get_pwm1_enabled() ? "true" : "false") + ",";
+  json += "\"pwm1_duty_percent\":" + String(task_output_get_pwm1_duty_percent()) + ",";
   json += "\"normal_use_sta_only\":" +
           String(normal_use_sta_only ? "true" : "false") + ",";
   json +=
@@ -202,6 +194,18 @@ void send_ok(AsyncWebServerRequest *request, const String &message) {
 
 bool is_valid_ap_password(const String &password) {
   return password.length() >= 8 && password.length() <= 63;
+}
+
+bool is_valid_mqtt_port(uint16_t port) {
+  return port > 0;
+}
+
+bool is_valid_publish_interval_sec(uint32_t sec) {
+  return sec >= 10UL && sec <= 3600UL;
+}
+
+bool is_valid_pwm1_duty_percent(uint32_t dutyPercent) {
+  return dutyPercent <= 100UL;
 }
 
 } // namespace
@@ -231,18 +235,15 @@ void app_webserver_init() {
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
     log_request("GET", request);
     if (current_app_mode == APP_MODE_NORMAL) {
-      Serial.println("[WEB] serving normal page");
       request->send(200, "text/html", app_html_get_normal_page());
       return;
     }
 
     if (is_config_unlocked()) {
-      Serial.println("[WEB] serving main page");
       request->send(200, "text/html", app_html_get_main_page());
       return;
     }
 
-    Serial.println("[WEB] serving login page");
     request->send(200, "text/html", app_html_get_login_page());
   });
 
@@ -294,11 +295,7 @@ void app_webserver_init() {
 
     refresh_client_lock_state();
 
-    Serial.printf("[AUTH] login attempt ip=%s keyLen=%u\n",
-                  ip.toString().c_str(), static_cast<unsigned>(key.length()));
-
     if (key != String(login_password)) {
-      Serial.println("[AUTH] login failed: wrong key");
       request->send(401, "application/json",
                     "{\"message\":\"Wrong login key\"}");
       return;
@@ -320,8 +317,6 @@ void app_webserver_init() {
       return;
     }
 
-    Serial.printf("[AUTH] login blocked: owner=%s requester=%s\n",
-                  g_clientIp.toString().c_str(), ip.toString().c_str());
     request->send(423, "application/json",
                   "{\"message\":\"Another client is active\"}");
   });
@@ -329,7 +324,6 @@ void app_webserver_init() {
   server.on("/api/logout", HTTP_POST, [](AsyncWebServerRequest *request) {
     log_request("POST", request);
     if (g_clientLocked && request->client()->remoteIP() == g_clientIp) {
-      Serial.println("[AUTH] owner logout");
       release_client_lock();
     }
     send_ok(request, "Logged out");
@@ -352,9 +346,6 @@ void app_webserver_init() {
 
     app_wifi_start_scan();
     const String payload = app_wifi_get_scan_cache_json();
-    Serial.printf("[WEB] scan cache size=%u inProgress=%s\n",
-                  static_cast<unsigned>(payload.length()),
-                  app_wifi_is_scan_in_progress() ? "true" : "false");
     request->send(200, "application/json", payload);
   });
 
@@ -365,9 +356,6 @@ void app_webserver_init() {
     }
 
     const String payload = app_wifi_get_scan_cache_json();
-    Serial.printf("[WEB] scan result cache size=%u inProgress=%s\n",
-                  static_cast<unsigned>(payload.length()),
-                  app_wifi_is_scan_in_progress() ? "true" : "false");
     request->send(200, "application/json", payload);
   });
 
@@ -388,9 +376,6 @@ void app_webserver_init() {
 
     const bool connected = app_wifi_connect_sta(ssid.c_str(), password.c_str());
     variable_save_sta();
-
-    Serial.printf("[WEB] sta save ssid=%s connected=%s\n", ssid.c_str(),
-                  connected ? "true" : "false");
 
     if (connected) {
       send_ok(request, "STA connected. Web URL: " + app_wifi_get_sta_url());
@@ -421,8 +406,6 @@ void app_webserver_init() {
     variable_save_ap();
     app_wifi_apply_current_mode();
 
-    Serial.printf("[WEB] ap saved ssid=%s\n", ap_ssid);
-
     send_ok(request, "AP saved. URL: " + app_wifi_get_ap_url());
   });
 
@@ -441,9 +424,59 @@ void app_webserver_init() {
 
     copy_text(login_password, sizeof(login_password), newKey);
     variable_save_login_key();
-    Serial.println("[WEB] login key updated");
     send_ok(request, "Login key updated");
   });
+
+  server.on("/api/mqtt-config", HTTP_POST,
+            [](AsyncWebServerRequest *request) {
+              log_request("POST", request);
+              if (!ensure_authorized(request)) {
+                return;
+              }
+
+              const String serverText = req_param(request, "server");
+              const String portText = req_param(request, "port");
+              const String userText = req_param(request, "user");
+              const String passwordText = req_param(request, "password");
+              const String intervalSecText =
+                  req_param(request, "publish_interval_sec");
+
+              if (serverText.length() == 0 || serverText.length() > 64 ||
+                  userText.length() > 64 || passwordText.length() > 64) {
+                request->send(400, "application/json",
+                              "{\"message\":\"Invalid MQTT text fields\"}");
+                return;
+              }
+
+              const uint16_t port = static_cast<uint16_t>(portText.toInt());
+              const uint32_t intervalSec =
+                  static_cast<uint32_t>(intervalSecText.toInt());
+
+              if (!is_valid_mqtt_port(port)) {
+                request->send(400, "application/json",
+                              "{\"message\":\"port must be 1..65535\"}");
+                return;
+              }
+
+              if (!is_valid_publish_interval_sec(intervalSec)) {
+                request->send(400, "application/json",
+                              "{\"message\":\"publish_interval_sec must be 10..3600\"}");
+                return;
+              }
+
+              copy_text(mqtt_server, sizeof(mqtt_server), serverText);
+              mqtt_port = port;
+              copy_text(mqtt_user, sizeof(mqtt_user), userText);
+              if (passwordText.length() > 0) {
+                copy_text(mqtt_password, sizeof(mqtt_password), passwordText);
+              }
+              mqtt_publish_interval_ms = intervalSec * 1000UL;
+
+              variable_save_mqtt();
+              variable_save_mqtt_publish_interval();
+
+              send_ok(request, "MQTT config updated");
+            });
 
   server.on("/api/config-timeout", HTTP_POST,
             [](AsyncWebServerRequest *request) {
@@ -462,8 +495,6 @@ void app_webserver_init() {
 
               config_timeout_ms = sec * 1000UL;
               variable_save_config_timeout();
-              Serial.printf("[WEB] config timeout updated: %lu sec\n",
-                            static_cast<unsigned long>(sec));
               send_ok(request, "Config timeout updated");
             });
 
@@ -475,18 +506,13 @@ void app_webserver_init() {
         return;
       }
 
-      Serial.println("[WEB] switch mode -> config");
       app_wifi_enter_config_mode();
       send_ok(request, "Switched to config mode");
       return;
     }
 
     if (mode == "normal") {
-      if (!ensure_authorized(request)) {
-        return;
-      }
-
-      Serial.println("[WEB] switch mode -> normal");
+      // Allow falling back to normal mode even if config session expired.
       app_wifi_enter_normal_mode();
       send_ok(request, "Switched to normal mode");
       return;
@@ -505,8 +531,6 @@ void app_webserver_init() {
               const String modeText = req_param(request, "normal_use_sta_only");
               normal_use_sta_only = modeText == "1" ? 1U : 0U;
               variable_save_normal_options();
-              Serial.printf("[WEB] normal option sta_only=%u\n",
-                            static_cast<unsigned>(normal_use_sta_only));
 
               if (current_app_mode == APP_MODE_NORMAL) {
                 app_wifi_apply_current_mode();
@@ -526,8 +550,6 @@ void app_webserver_init() {
     const String enabled = req_param(request, "enabled");
     normal_ap_enabled = enabled == "1" ? 1U : 0U;
     variable_save_normal_options();
-    Serial.printf("[WEB] ap toggle enabled=%u\n",
-                  static_cast<unsigned>(normal_ap_enabled));
 
     if (current_app_mode == APP_MODE_NORMAL) {
       app_wifi_apply_current_mode();
@@ -535,6 +557,44 @@ void app_webserver_init() {
 
     send_ok(request, normal_ap_enabled ? "AP enabled in normal mode"
                                        : "AP disabled in normal mode");
+  });
+
+  server.on("/api/output-led1", HTTP_POST, [](AsyncWebServerRequest *request) {
+    log_request("POST", request);
+    if (current_app_mode != APP_MODE_NORMAL) {
+      request->send(403, "application/json",
+                    "{\"message\":\"Output control is available only in normal mode\"}");
+      return;
+    }
+
+    const String enabledText = req_param(request, "enabled");
+    const bool enabled = (enabledText == "1" || enabledText == "true");
+    task_output_set_led1_enabled(enabled);
+    send_ok(request, enabled ? "LED1 enabled" : "LED1 disabled");
+  });
+
+  server.on("/api/output-pwm1", HTTP_POST, [](AsyncWebServerRequest *request) {
+    log_request("POST", request);
+    if (current_app_mode != APP_MODE_NORMAL) {
+      request->send(403, "application/json",
+                    "{\"message\":\"Output control is available only in normal mode\"}");
+      return;
+    }
+
+    const String enabledText = req_param(request, "enabled");
+    const String dutyText = req_param(request, "duty_percent");
+
+    const bool enabled = (enabledText == "1" || enabledText == "true");
+    const uint32_t dutyPercent = static_cast<uint32_t>(dutyText.toInt());
+
+    if (!is_valid_pwm1_duty_percent(dutyPercent)) {
+      request->send(400, "application/json",
+                    "{\"message\":\"duty_percent must be 0..100\"}");
+      return;
+    }
+
+    task_output_set_pwm1_config(enabled, static_cast<uint8_t>(dutyPercent));
+    send_ok(request, enabled ? "PWM1 enabled" : "PWM1 disabled");
   });
 
   DefaultHeaders::Instance().addHeader("Access-Control-Allow-Origin", "*");

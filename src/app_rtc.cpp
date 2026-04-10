@@ -205,3 +205,16 @@ String app_rtc_now_iso8601() {
   const time_t now = software_now_epoch();
   return format_iso8601(now);
 }
+
+uint32_t app_rtc_now_timestamp() {
+  if (!g_rtcReady) {
+    return 0;
+  }
+
+  const time_t now = software_now_epoch();
+  if (now < 0) {
+    return 0;
+  }
+
+  return static_cast<uint32_t>(now);
+}

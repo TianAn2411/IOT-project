@@ -14,6 +14,7 @@ uint32_t g_modeStartedMs = 0;
 bool g_apActive = false;
 bool g_scanInProgress = false;
 bool g_scanRequestPending = false;
+uint8_t g_scanAttempt = 0;
 String g_scanCacheJson = "{\"networks\":[],\"count\":0,\"message\":\"Scan not started\"}";
 bool g_internetConnected = false;
 bool g_hasInternetCheckResult = false;
@@ -130,6 +131,16 @@ void update_scan_cache_from_driver() {
   }
 
   if (scanState >= 0) {
+    if (scanState == 0 && g_scanAttempt < 2) {
+      // First scan can occasionally return empty results; retry once automatically.
+      WiFi.scanDelete();
+      g_scanInProgress = false;
+      g_scanRequestPending = true;
+      g_scanCacheJson = "{\"networks\":[],\"count\":0,\"message\":\"Scan in progress\"}";
+      Serial.println("[SCAN] empty result, retrying once");
+      return;
+    }
+
     g_scanCacheJson = build_scan_json_from_results(scanState);
   } else {
     g_scanCacheJson = "{\"networks\":[],\"count\":0,\"message\":\"Scan failed\"}";
@@ -142,32 +153,34 @@ void update_scan_cache_from_driver() {
 void run_scan_now() {
   g_scanRequestPending = false;
   g_scanInProgress = true;
+  g_scanAttempt++;
   g_scanCacheJson = "{\"networks\":[],\"count\":0,\"message\":\"Scan in progress\"}";
 
   log_scan_state("start");
-  const uint32_t startMs = millis();
   WiFi.scanDelete();
-  WiFi.disconnect();
-  vTaskDelay(pdMS_TO_TICKS(100));
-  
-  const int count = WiFi.scanNetworks(false, true);
-  const uint32_t elapsedMs = millis() - startMs;
 
-  if (count >= 0) {
-    g_scanCacheJson = build_scan_json_from_results(count);
-    Serial.printf("[SCAN] done count=%d elapsed=%lu ms\n",
-                  count,
-                  static_cast<unsigned long>(elapsedMs));
-  } else {
+  // Start async scan to avoid blocking and to keep current connectivity state.
+  const int startResult = WiFi.scanNetworks(true, true);
+  if (startResult == WIFI_SCAN_FAILED) {
     g_scanCacheJson = "{\"networks\":[],\"count\":0,\"message\":\"Scan failed\"}";
-    Serial.printf("[SCAN] failed state=%d elapsed=%lu ms\n",
-                  count,
-                  static_cast<unsigned long>(elapsedMs));
+    g_scanInProgress = false;
+    Serial.printf("[SCAN] start failed state=%d\n", startResult);
+    log_scan_state("end-failed");
+    return;
   }
 
-  WiFi.scanDelete();
-  g_scanInProgress = false;
-  log_scan_state("end");
+  if (startResult >= 0) {
+    // Some environments may return completed count immediately.
+    g_scanCacheJson = build_scan_json_from_results(startResult);
+    WiFi.scanDelete();
+    g_scanInProgress = false;
+    Serial.printf("[SCAN] immediate done count=%d\n", startResult);
+    log_scan_state("end-immediate");
+    return;
+  }
+
+  // Normal async path: result will be collected in update_scan_cache_from_driver().
+  Serial.println("[SCAN] async started");
 }
 
 void apply_config_mode() {
@@ -375,6 +388,7 @@ void app_wifi_start_scan() {
     return;
   }
 
+  g_scanAttempt = 0;
   g_scanRequestPending = true;
   g_scanCacheJson = "{\"networks\":[],\"count\":0,\"message\":\"Scan queued\"}";
   log_scan_state("queued");
