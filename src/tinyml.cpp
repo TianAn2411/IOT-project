@@ -1,4 +1,7 @@
 #include "tinyml.h"
+#include "hcm_weather_binary_model.h"
+#include "app_rtc.h"
+#include <math.h>
 
 // Globals, for the convenience of one-shot setup.
 namespace
@@ -18,7 +21,7 @@ void setupTinyML()
     static tflite::MicroErrorReporter micro_error_reporter;
     error_reporter = &micro_error_reporter;
 
-    model = tflite::GetModel(weather_model_tflite);
+    model = tflite::GetModel(hcm_weather_binary_model_tflite);
     if (model->version() != TFLITE_SCHEMA_VERSION)
     {
         error_reporter->Report("Model provided is schema version %d, not equal to supported version %d.",
@@ -62,10 +65,15 @@ void tiny_ml_task(void *pvParameters)
             }
         }
 
-        // Prepare input data (e.g., sensor readings)
-        // For a simple example, let's assume a single float input
+        float hour_float = app_rtc_get_hour_float();
+        float hour_sin = sin(2.0 * PI * hour_float / 24.0);
+        float hour_cos = cos(2.0 * PI * hour_float / 24.0);
+
+        // Prepare input data (4 inputs: temp, humi, hour_sin, hour_cos)
         input->data.f[0] = t;
         input->data.f[1] = h;
+        input->data.f[2] = hour_sin;
+        input->data.f[3] = hour_cos;
 
         // Run inference
         TfLiteStatus invoke_status = interpreter->Invoke();
@@ -75,23 +83,26 @@ void tiny_ml_task(void *pvParameters)
             return;
         }
 
-        // Get and process output
-        // Assuming output[0] is max, output[1] is min based on user prompt 'max - min' typical order, or just assigning them directly.
-        float pMax = output->data.f[0];
-        float pMin = output->data.f[1];
+        // Get and process output (assuming [0]=Clear Sky, [1]=Cloudy or vice versa. Usually index 0 represents Class 0 label).
+        float p0 = output->data.f[0];
+        float p1 = output->data.f[1];
+
+        String weather = (p0 > p1) ? "Clear Sky" : "Cloudy";
         
         if (ctx) {
             if (xSemaphoreTake(ctx->dataMutex, portMAX_DELAY) == pdTRUE) {
-                ctx->predictedMaxTemp = pMax;
-                ctx->predictedMinTemp = pMin;
+                ctx->predictedWeather = weather;
                 xSemaphoreGive(ctx->dataMutex);
             }
         }
 
-        Serial.print("Inference result: Max=");
-        Serial.print(pMax);
-        Serial.print(", Min=");
-        Serial.println(pMin);
+        Serial.print("Inference result: ");
+        Serial.print(weather);
+        Serial.print(" (p0=");
+        Serial.print(p0);
+        Serial.print(", p1=");
+        Serial.print(p1);
+        Serial.println(")");
 
         vTaskDelay(5000);
     }

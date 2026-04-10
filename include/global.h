@@ -18,8 +18,7 @@ struct GlobalContext {
     // Sensor Information
     float temperature = -1.0;
     float humidity = -1.0;
-    float predictedMinTemp = 0.0;
-    float predictedMaxTemp = 0.0;
+    String predictedWeather = "Unknown";
 
     // States
     SensorState tempState = STATE_NORMAL;
@@ -56,9 +55,6 @@ struct GlobalContext {
 #include "temp_humi_monitor.h"
 #include "tinyml.h"
 #include "coreiot.h"
-#include "task_check_info.h"
-#include "task_wifi.h"
-#include "task_core_iot.h"
 #include "task_lcd.h"
 
 #endif // __GLOBAL_H__

@@ -147,6 +147,9 @@ void run_scan_now() {
   log_scan_state("start");
   const uint32_t startMs = millis();
   WiFi.scanDelete();
+  WiFi.disconnect();
+  vTaskDelay(pdMS_TO_TICKS(100));
+  
   const int count = WiFi.scanNetworks(false, true);
   const uint32_t elapsedMs = millis() - startMs;
 

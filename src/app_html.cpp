@@ -214,7 +214,7 @@ String app_html_get_normal_page() {
     </div>
 
     <div class="card">
-      <h2>Sensor (Dummy)</h2>
+      <h2>Sensor</h2>
       <div class="status" id="sensorStatus">--</div>
     </div>
   </div>

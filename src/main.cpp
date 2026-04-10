@@ -28,24 +28,7 @@ void taskwebserver_member1(void *parameter) {
   }
 }
 
-void main_task(void *pvParameters)
-{
-  GlobalContext* ctx = (GlobalContext*)pvParameters;
-  while(1) {
-    if (check_info_File(ctx, 1))
-    {
-      if (!app_wifi_is_sta_connected())
-      {
-        // CORE_IOT_stop/pause or handled within task
-      }
-      else
-      {
-        // CORE_IOT_reconnect(ctx);
-      }
-    }
-    vTaskDelay(100 / portTICK_PERIOD_MS);
-  }
-}
+// Empty space previously held main_task
 
 
 void setup()
@@ -63,8 +46,7 @@ void setup()
   ctx->semLCDUpdate = xSemaphoreCreateBinary();
   ctx->xBinarySemaphoreInternet = xSemaphoreCreateBinary();
 
-  // Load configs (old method, kept for compatibility if needed)
-  check_info_File(ctx, 0);
+  // Config loaded via Member 1 modules (variable_init)
 
   // Initialize Member 1 modules
   eeprom_init();
@@ -83,8 +65,7 @@ void setup()
   xTaskCreate( tiny_ml_task, "Tiny ML Task" , 4096  ,ctx  ,2 , NULL);
   xTaskCreate(coreiot_task, "CoreIOT Task" ,4096  ,ctx  ,2 , NULL);
   
-  // Main logic
-  xTaskCreate(main_task, "Main Task", 4096, ctx, 2, NULL);
+  // Main loop logic handled by individual tasks instead of monolith
 
   // Delete loop task
   vTaskDelete(NULL);
