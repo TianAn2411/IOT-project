@@ -32,20 +32,6 @@ struct GlobalContext {
     SemaphoreHandle_t semHumiUpdate;
     SemaphoreHandle_t semLCDUpdate;
 
-    // Networking
-    String WIFI_SSID;
-    String WIFI_PASS;
-    String CORE_IOT_TOKEN;
-    String CORE_IOT_SERVER;
-    String CORE_IOT_PORT;
-
-    String ssid = "ESP32-YOUR NETWORK HERE!!!";
-    String password = "12345678";
-    String wifi_ssid = "abcde";
-    String wifi_password = "123456789";
-    
-    boolean isWifiConnected = false;
-    SemaphoreHandle_t xBinarySemaphoreInternet;
 };
 
 // --- Task & Module Includes ---
@@ -54,7 +40,6 @@ struct GlobalContext {
 #include "neo_blinky.h"
 #include "temp_humi_monitor.h"
 #include "tinyml.h"
-#include "coreiot.h"
 #include "task_lcd.h"
 
 #endif // __GLOBAL_H__

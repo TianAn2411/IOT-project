@@ -44,7 +44,6 @@ void setup()
   ctx->semTempUpdate = xSemaphoreCreateBinary();
   ctx->semHumiUpdate = xSemaphoreCreateBinary();
   ctx->semLCDUpdate = xSemaphoreCreateBinary();
-  ctx->xBinarySemaphoreInternet = xSemaphoreCreateBinary();
 
   // Config loaded via Member 1 modules (variable_init)
 
@@ -63,7 +62,6 @@ void setup()
   xTaskCreate(task_lcd, "Task LCD", 2048, ctx, 2, NULL);
   xTaskCreate(taskwebserver_member1, "task webserver M1", 8192, nullptr, 2, nullptr);
   xTaskCreate( tiny_ml_task, "Tiny ML Task" , 4096  ,ctx  ,2 , NULL);
-  xTaskCreate(coreiot_task, "CoreIOT Task" ,4096  ,ctx  ,2 , NULL);
   
   // Main loop logic handled by individual tasks instead of monolith
 
