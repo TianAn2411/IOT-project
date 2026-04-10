@@ -6,12 +6,15 @@
 /* Define --------------------------------------------------------------------*/
 constexpr uint32_t kButtonPollMs = 50;
 constexpr uint32_t kHold2sTicks = 2000 / kButtonPollMs;
+constexpr uint32_t kHold10sTicks = 10000 / kButtonPollMs;
 
 /* Variables -----------------------------------------------------------------*/
 uint32_t key_code                  = 0;
 uint32_t key_code_before_releasing = 0;
 volatile bool g_hold2sEventPending = false;
+volatile bool g_hold10sEventPending = false;
 bool g_hold2sLatched = false;
+bool g_hold10sLatched = false;
 
 /* Task handles */
 TaskHandle_t buttonTaskHandle = NULL;
@@ -34,12 +37,18 @@ void button_task(void* pvParameters)
         g_hold2sLatched = true;
         g_hold2sEventPending = true;
       }
+
+      if (key_code >= kHold10sTicks && !g_hold10sLatched) {
+        g_hold10sLatched = true;
+        g_hold10sEventPending = true;
+      }
     }
     else
     {
       key_code_before_releasing = key_code;
       key_code                  = 0;
       g_hold2sLatched = false;
+      g_hold10sLatched = false;
     }
 
     vTaskDelay(pdMS_TO_TICKS(kButtonPollMs));
@@ -64,5 +73,14 @@ bool button_is_hold_2s_event() {
   }
 
   g_hold2sEventPending = false;
+  return true;
+}
+
+bool button_is_hold_10s_event() {
+  if (!g_hold10sEventPending) {
+    return false;
+  }
+
+  g_hold10sEventPending = false;
   return true;
 }

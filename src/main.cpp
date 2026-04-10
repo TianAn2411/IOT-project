@@ -18,6 +18,14 @@ GlobalContext* global_ctx = nullptr;
 void taskwebserver_member1(void *parameter) {
   (void)parameter;
   for (;;) {
+    if (button_is_hold_10s_event()) {
+      Serial.println("[BTN] GPIO0 held 10s -> reset parameters to defaults and reboot");
+      variable_set_defaults();
+      variable_save_all();
+      vTaskDelay(pdMS_TO_TICKS(300));
+      ESP.restart();
+    }
+
     if (button_is_hold_2s_event() && current_app_mode != APP_MODE_CONFIG) {
       Serial.println("[BTN] GPIO0 held 2s -> enter config mode");
       app_wifi_enter_config_mode();

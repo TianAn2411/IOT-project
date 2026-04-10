@@ -16,5 +16,6 @@ extern uint32_t key_code_before_releasing;
 void button_init();
 void button_process();             // Process button state
 bool button_is_hold_2s_event();
+bool button_is_hold_10s_event();
 
 #endif
