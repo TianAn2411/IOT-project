@@ -6,6 +6,7 @@
 
 #include <ArduinoHttpClient.h>
 #include <WiFi.h>
+#include <esp_wifi.h>
 #include <cstring>
 
 namespace {
@@ -18,7 +19,7 @@ uint8_t g_scanAttempt = 0;
 String g_scanCacheJson = "{\"networks\":[],\"count\":0,\"message\":\"Scan not started\"}";
 bool g_scanShowHidden = false;
 bool g_scanPassive = false;
-uint32_t g_scanMaxMsPerChannel = 500;
+uint32_t g_scanMaxMsPerChannel = 300;
 uint8_t g_scanChannel = 0;
 bool g_staConnectPending = false;
 uint32_t g_lastStaConnectAttemptMs = 0;
@@ -111,20 +112,23 @@ void log_scan_state(const char *tag) {
 }
 
 void start_ap() {
-  WiFi.softAPdisconnect(true);
   g_apActive = WiFi.softAP(ap_ssid, ap_password);
 }
 
 void stop_ap() {
-  WiFi.softAPdisconnect(true);
+  WiFi.softAPdisconnect(false);
   g_apActive = false;
 }
 
 void start_sta_async() {
   if (strlen(sta_ssid) == 0) {
+    // Force ESP32 to fully initialize the STA radio state machine
+    // so that WiFi.scanNetworks() won't return state=-2.
+    WiFi.begin("dummy", "dummy");
+    WiFi.disconnect();
     return;
   }
-
+  
   WiFi.begin(sta_ssid, sta_password);
 }
 
@@ -184,8 +188,10 @@ void update_scan_cache_from_driver() {
     }
 
     g_scanCacheJson = build_scan_json_from_results(scanState);
+    Serial.printf("[SCAN] Completed successfully! Found %d networks.\n", scanState);
   } else {
     g_scanCacheJson = "{\"networks\":[],\"count\":0,\"message\":\"Scan failed\"}";
+    Serial.printf("[SCAN] Failed in background, scanState=%d\n", scanState);
   }
 
   WiFi.scanDelete();
@@ -201,12 +207,8 @@ void run_scan_now() {
   log_scan_state("start");
   WiFi.scanDelete();
 
-  // Start async scan with explicit scan configuration.
-  const int startResult = WiFi.scanNetworks(true,
-                                            g_scanShowHidden,
-                                            g_scanPassive,
-                                            g_scanMaxMsPerChannel,
-                                            g_scanChannel);
+  // Start async scan with default core parameters to avoid rejection
+  const int startResult = WiFi.scanNetworks(true);
   if (startResult == WIFI_SCAN_FAILED) {
     g_scanCacheJson = "{\"networks\":[],\"count\":0,\"message\":\"Scan failed\"}";
     g_scanInProgress = false;
@@ -216,7 +218,6 @@ void run_scan_now() {
   }
 
   if (startResult >= 0) {
-    // Some environments may return completed count immediately.
     g_scanCacheJson = build_scan_json_from_results(startResult);
     WiFi.scanDelete();
     g_scanInProgress = false;
@@ -225,7 +226,6 @@ void run_scan_now() {
     return;
   }
 
-  // Normal async path: result will be collected in update_scan_cache_from_driver().
   Serial.println("[SCAN] async started");
 }
 
@@ -310,7 +310,7 @@ void update_internet_status() {
 }  // namespace
 
 void app_wifi_init() {
-  WiFi.setAutoReconnect(true);
+  WiFi.setAutoReconnect(false);
   WiFi.persistent(false);
 
   current_app_mode = APP_MODE_CONFIG;
