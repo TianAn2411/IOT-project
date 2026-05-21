@@ -34,9 +34,9 @@ void temp_humi_monitor(void *pvParameters){
             ctx->humidity = h;
 
             // Define temperature conditions
-            if (t < 30) {
+            if (t < 29) {
                 ctx->tempState = STATE_NORMAL;
-            } else if (t < 35) {
+            } else if (t < 31) {
                 ctx->tempState = STATE_WARNING;
             } else {
                 ctx->tempState = STATE_CRITICAL;

@@ -8,6 +8,7 @@ void app_wifi_loop();
 void app_wifi_enter_config_mode();
 void app_wifi_enter_normal_mode();
 
+bool app_wifi_begin_sta_connect(const char *ssid, const char *password);
 bool app_wifi_connect_sta(const char *ssid, const char *password, uint32_t timeoutMs = 15000UL);
 void app_wifi_apply_current_mode();
 
@@ -26,6 +27,11 @@ void app_wifi_poll_scan();
 bool app_wifi_is_scan_in_progress();
 String app_wifi_scan_networks_json();
 String app_wifi_get_scan_cache_json();
+void app_wifi_set_scan_config(bool showHidden,
+							  bool passive,
+							  uint32_t maxMsPerChannel,
+							  uint8_t channel);
+String app_wifi_get_scan_config_json();
 
 uint32_t app_wifi_get_mode_started_ms();
 uint32_t app_wifi_get_mode_elapsed_ms();

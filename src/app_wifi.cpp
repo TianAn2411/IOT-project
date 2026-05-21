@@ -16,12 +16,20 @@ bool g_scanInProgress = false;
 bool g_scanRequestPending = false;
 uint8_t g_scanAttempt = 0;
 String g_scanCacheJson = "{\"networks\":[],\"count\":0,\"message\":\"Scan not started\"}";
+bool g_scanShowHidden = false;
+bool g_scanPassive = false;
+uint32_t g_scanMaxMsPerChannel = 500;
+uint8_t g_scanChannel = 0;
+bool g_staConnectPending = false;
+uint32_t g_lastStaConnectAttemptMs = 0;
+uint8_t g_staConnectRetryCount = 0;
 bool g_internetConnected = false;
 bool g_hasInternetCheckResult = false;
 uint32_t g_lastInternetCheckMs = 0;
 
 constexpr uint32_t kInternetCheckIntervalMs = 120000UL;  // every 2 minutes
 constexpr uint32_t kInternetCheckTimeoutMs = 5000UL;
+constexpr uint32_t kStaReconnectIntervalMs = 8000UL;
 constexpr char kInternetCheckHost[] = "www.google.com";
 constexpr uint16_t kInternetCheckPort = 80;
 constexpr char kInternetCheckPath[] = "/generate_204";
@@ -120,6 +128,40 @@ void start_sta_async() {
   WiFi.begin(sta_ssid, sta_password);
 }
 
+void maintain_sta_connect_attempt() {
+  if (!g_staConnectPending) {
+    return;
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    g_staConnectPending = false;
+    g_staConnectRetryCount = 0;
+    Serial.printf("[STA] connected to %s ip=%s\n",
+                  WiFi.SSID().c_str(),
+                  WiFi.localIP().toString().c_str());
+    return;
+  }
+
+  const uint32_t nowMs = millis();
+  if ((nowMs - g_lastStaConnectAttemptMs) < kStaReconnectIntervalMs) {
+    return;
+  }
+
+  if (strlen(sta_ssid) == 0) {
+    g_staConnectPending = false;
+    g_staConnectRetryCount = 0;
+    return;
+  }
+
+  g_lastStaConnectAttemptMs = nowMs;
+  g_staConnectRetryCount++;
+  WiFi.begin(sta_ssid, sta_password);
+  Serial.printf("[STA] reconnect attempt #%u ssid=%s status=%d\n",
+                static_cast<unsigned>(g_staConnectRetryCount),
+                sta_ssid,
+                static_cast<int>(WiFi.status()));
+}
+
 void update_scan_cache_from_driver() {
   if (!g_scanInProgress) {
     return;
@@ -159,8 +201,12 @@ void run_scan_now() {
   log_scan_state("start");
   WiFi.scanDelete();
 
-  // Start async scan to avoid blocking and to keep current connectivity state.
-  const int startResult = WiFi.scanNetworks(true, true);
+  // Start async scan with explicit scan configuration.
+  const int startResult = WiFi.scanNetworks(true,
+                                            g_scanShowHidden,
+                                            g_scanPassive,
+                                            g_scanMaxMsPerChannel,
+                                            g_scanChannel);
   if (startResult == WIFI_SCAN_FAILED) {
     g_scanCacheJson = "{\"networks\":[],\"count\":0,\"message\":\"Scan failed\"}";
     g_scanInProgress = false;
@@ -277,6 +323,7 @@ void app_wifi_loop() {
   }
 
   update_scan_cache_from_driver();
+  maintain_sta_connect_attempt();
 
   if (current_app_mode == APP_MODE_CONFIG) {
     const uint32_t elapsed = millis() - g_modeStartedMs;
@@ -308,7 +355,7 @@ void app_wifi_apply_current_mode() {
   }
 }
 
-bool app_wifi_connect_sta(const char *ssid, const char *password, uint32_t timeoutMs) {
+bool app_wifi_begin_sta_connect(const char *ssid, const char *password) {
   if (ssid == nullptr || strlen(ssid) == 0) {
     return false;
   }
@@ -316,7 +363,22 @@ bool app_wifi_connect_sta(const char *ssid, const char *password, uint32_t timeo
   copy_text(sta_ssid, sizeof(sta_ssid), ssid);
   copy_text(sta_password, sizeof(sta_password), password == nullptr ? "" : password);
 
+  // Reset current STA connection state before starting a new manual connection flow.
+  WiFi.disconnect(false, true);
   WiFi.begin(sta_ssid, sta_password);
+
+  g_staConnectPending = true;
+  g_staConnectRetryCount = 0;
+  g_lastStaConnectAttemptMs = millis();
+
+  Serial.printf("[STA] manual connect requested ssid=%s\n", sta_ssid);
+  return true;
+}
+
+bool app_wifi_connect_sta(const char *ssid, const char *password, uint32_t timeoutMs) {
+  if (!app_wifi_begin_sta_connect(ssid, password)) {
+    return false;
+  }
 
   const uint32_t start = millis();
   while (millis() - start < timeoutMs) {
@@ -413,6 +475,42 @@ String app_wifi_scan_networks_json() {
 
 String app_wifi_get_scan_cache_json() {
   return g_scanCacheJson;
+}
+
+void app_wifi_set_scan_config(bool showHidden,
+                              bool passive,
+                              uint32_t maxMsPerChannel,
+                              uint8_t channel) {
+
+  if (maxMsPerChannel < 30) {
+    maxMsPerChannel = 30;
+  } else if (maxMsPerChannel > 1500) {
+    maxMsPerChannel = 1500;
+  }
+
+  g_scanShowHidden = showHidden;
+  g_scanPassive = passive;
+  g_scanMaxMsPerChannel = maxMsPerChannel;
+  g_scanChannel = channel;
+
+  Serial.printf("[SCAN] config updated hidden=%s passive=%s maxMsPerChan=%lu channel=%u\n",
+                g_scanShowHidden ? "true" : "false",
+                g_scanPassive ? "true" : "false",
+                static_cast<unsigned long>(g_scanMaxMsPerChannel),
+                static_cast<unsigned>(g_scanChannel));
+}
+
+String app_wifi_get_scan_config_json() {
+  String json = "{\"async\":true,\"show_hidden\":";
+  json += g_scanShowHidden ? "true" : "false";
+  json += ",\"passive\":";
+  json += g_scanPassive ? "true" : "false";
+  json += ",\"max_ms_per_channel\":";
+  json += String(g_scanMaxMsPerChannel);
+  json += ",\"channel\":";
+  json += String(g_scanChannel);
+  json += "}";
+  return json;
 }
 
 uint32_t app_wifi_get_mode_started_ms() {

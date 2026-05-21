@@ -3,13 +3,13 @@
 #include <Wire.h>
 
 // 0x21 is often decimal 33. I2C address for some LCD backpacks.
-LiquidCrystal_I2C lcd(39, 16, 2); 
+LiquidCrystal_I2C lcd(33, 16, 2); 
 
 void task_lcd(void *pvParameters) {
     GlobalContext *ctx = (GlobalContext *)pvParameters;
     Wire.begin(11, 12);
     lcd.begin();
-    lcd.noBacklight();
+    lcd.backlight();
     lcd.clear();
     lcd.setCursor(0, 0);
     lcd.print("Group An Tai");

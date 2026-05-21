@@ -3,8 +3,8 @@
 #include <Arduino.h>
 
 // Default STA settings
-#define WIFI_SSID_DEFAULT "P628"
-#define WIFI_PASSWORD_DEFAULT "628628628"
+#define WIFI_SSID_DEFAULT "Tai's phone"
+#define WIFI_PASSWORD_DEFAULT "tai12345"
 
 // Default AP settings
 #define AP_SSID_DEFAULT "AP-ESP32"

@@ -374,15 +374,15 @@ void app_webserver_init() {
       return;
     }
 
-    const bool connected = app_wifi_connect_sta(ssid.c_str(), password.c_str());
-    variable_save_sta();
-
-    if (connected) {
-      send_ok(request, "STA connected. Web URL: " + app_wifi_get_sta_url());
-    } else {
-      request->send(200, "application/json",
-                    "{\"message\":\"Saved STA, connect timeout\"}");
+    const bool started = app_wifi_begin_sta_connect(ssid.c_str(), password.c_str());
+    if (!started) {
+      request->send(400, "application/json",
+                    "{\"message\":\"Invalid STA credentials\"}");
+      return;
     }
+
+    variable_save_sta();
+    send_ok(request, "Saved STA. Connecting in background");
   });
 
   server.on("/api/ap", HTTP_POST, [](AsyncWebServerRequest *request) {
