@@ -630,6 +630,7 @@ String app_html_get_main_page() {
         <label>Publish Interval (seconds)</label>
         <input id="mqttIntervalSec" type="number" min="10" max="3600" step="10" />
         <button onclick="saveMqttConfig()">Lưu MQTT</button>
+        <div class="status" id="mqttCurrentValues" style="margin-top:12px; padding-top:12px; border-top:1px solid var(--line);"></div>
         <div class="status" id="mqttStatus"></div>
       </section>
 
@@ -695,14 +696,21 @@ async function refreshStatus() {
       document.getElementById('timeoutSec').value = s.config_timeout_sec;
       document.getElementById('staSsid').value = s.sta_ssid;
       document.getElementById('apSsid').value = s.ap_ssid;
+      
+      document.getElementById('mqttServer').value = s.mqtt_server || '';
+      document.getElementById('mqttPort').value = s.mqtt_port || 1883;
+      document.getElementById('mqttUser').value = s.mqtt_user || '';
+      document.getElementById('mqttPassword').value = s.mqtt_password || '';
+      document.getElementById('mqttIntervalSec').value = s.mqtt_publish_interval_sec || 60;
+
       g_isInitialized = true;
     }
 
-    document.getElementById('mqttServer').value = s.mqtt_server || '';
-    document.getElementById('mqttPort').value = s.mqtt_port || 1883;
-    document.getElementById('mqttUser').value = s.mqtt_user || '';
-    document.getElementById('mqttPassword').value = s.mqtt_password || '';
-    document.getElementById('mqttIntervalSec').value = s.mqtt_publish_interval_sec || 60;
+    document.getElementById('mqttCurrentValues').innerHTML = 
+      '<strong>Giá trị hiện tại trên ESP32:</strong><br>' +
+      'Server: ' + esc(s.mqtt_server || '(trống)') + ':' + (s.mqtt_port || 1883) + '<br>' +
+      'User: ' + esc(s.mqtt_user || '(trống)') + '<br>' +
+      'Chu kỳ gửi: ' + (s.mqtt_publish_interval_sec || 60) + 's';
 
     document.getElementById('modeStatus').innerHTML =
       'Config timeout: ' + s.config_timeout_sec + 's<br>' +
@@ -782,7 +790,7 @@ async function scanWifi() {
         continue;
       }
 
-      sel.innerHTML = '';
+      sel.innerHTML = '<option value="" disabled selected>-- Chọn mạng WiFi --</option>';
       networks.forEach(n => {
         const opt = document.createElement('option');
         opt.value = n.ssid;
@@ -801,6 +809,11 @@ async function scanWifi() {
 
       setMsg('staStatus', 'Tim thay ' + networks.length + ' mang WiFi', true);
       sel.onchange = () => { document.getElementById('staSsid').value = sel.value; };
+      
+      // Auto-fill the strongest network if they don't want to select manually
+      if (networks.length > 0) {
+        document.getElementById('staSsid').value = networks[0].ssid;
+      }
       return;
     }
 

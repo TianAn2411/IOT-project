@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 IoT Dashboard</title>
+    <!-- Modern Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <div class="background-animation"></div>
+    <div class="container">
+        <header>
+            <h1><i class="fa-solid fa-microchip"></i> ESP32 IoT Dashboard</h1>
+            <p class="subtitle">Real-time Telemetry & Control</p>
+        </header>
+
+        <main class="dashboard">
+            <!-- Telemetry Cards -->
+            <section class="panel telemetry-panel">
+                <h2><i class="fa-solid fa-satellite-dish"></i> Live Telemetry</h2>
+                <div class="card-grid">
+                    <div class="card glass">
+                        <div class="card-icon temp-icon"><i class="fa-solid fa-temperature-half"></i></div>
+                        <div class="card-content">
+                            <h3>Temperature</h3>
+                            <div class="value" id="val-temp">-- °C</div>
+                        </div>
+                    </div>
+                    <div class="card glass">
+                        <div class="card-icon hum-icon"><i class="fa-solid fa-droplet"></i></div>
+                        <div class="card-content">
+                            <h3>Humidity</h3>
+                            <div class="value" id="val-hum">-- %</div>
+                        </div>
+                    </div>
+                    <div class="card glass">
+                        <div class="card-icon pred-icon"><i class="fa-solid fa-cloud-sun-rain"></i></div>
+                        <div class="card-content">
+                            <h3>Prediction</h3>
+                            <div class="value" id="val-pred">--</div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Control & Info Panel -->
+            <div class="side-panels">
+                <section class="panel control-panel glass">
+                    <h2><i class="fa-solid fa-gamepad"></i> Device Control (PWM2)</h2>
+                    <div class="control-group">
+                        <div class="toggle-container">
+                            <span class="label">Status</span>
+                            <label class="switch">
+                                <input type="checkbox" id="pwm-toggle">
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
+                        <div class="slider-container">
+                            <span class="label">Duty Cycle</span>
+                            <input type="range" min="0" max="100" value="0" class="duty-slider" id="pwm-duty">
+                            <span class="value-display" id="val-duty">0%</span>
+                        </div>
+                        <button id="btn-apply-pwm" class="btn-primary">Apply Settings</button>
+                    </div>
+                </section>
+
+                <section class="panel info-panel glass">
+                    <h2><i class="fa-solid fa-circle-info"></i> Device Attributes</h2>
+                    <ul class="attr-list">
+                        <li><strong>Device:</strong> <span id="attr-device">--</span></li>
+                        <li><strong>Wi-Fi SSID:</strong> <span id="attr-ssid">--</span></li>
+                        <li><strong>MQTT Interval:</strong> <span id="attr-interval">--</span> s</li>
+                        <li><strong>Status:</strong> <span id="status-badge" class="badge status-offline">Offline</span></li>
+                    </ul>
+                </section>
+            </div>
+        </main>
+    </div>
+    
+    <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
